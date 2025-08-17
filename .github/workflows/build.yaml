@@ -1,0 +1,51 @@
+name: Build Clash Rules
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # tiap hari jam 00:00 UTC
+  workflow_dispatch:      # bisa dijalankan manual
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install sing-box
+        run: |
+          curl -L https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-$(uname -m)-unknown-linux-gnu.tar.gz -o singbox.tar.gz
+          tar -xzf singbox.tar.gz
+          sudo mv sing-box*/sing-box /usr/local/bin/sing-box
+
+      - name: Download geosite.db & geoip.db
+        run: |
+          curl -L https://github.com/malikshi/sing-box-geo/raw/mrs/geosite.db -o geosite.db
+          curl -L https://github.com/malikshi/sing-box-geo/raw/mrs/geoip.db -o geoip.db
+
+      - name: Convert geosite.db → JSON
+        run: sing-box geo convert --input geosite.db --output geosite.json --format=json
+
+      - name: Convert geoip.db → JSON
+        run: sing-box geo convert --input geoip.db --output geoip.json --format=json
+
+      - name: Install Python deps
+        run: pip install pyyaml
+
+      - name: Convert geosite.json → geosite.yaml
+        run: python scripts/convert.py geosite.json geosite.yaml
+
+      - name: Convert geoip.json → geoip.yaml
+        run: python scripts/convert.py geoip.json geoip.yaml
+
+      - name: Deploy to gh-pages
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout --orphan gh-pages
+          mv geosite.yaml geosite.yaml
+          mv geoip.yaml geoip.yaml
+          git add geosite.yaml geoip.yaml
+          git commit -m "update rules"
+          git push -f origin gh-pages
